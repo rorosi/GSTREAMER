@@ -2,6 +2,8 @@
 #include <string.h>
 #include <gst/app/gstappsrc.h>
 #include <gst/app/gstappsink.h>
+#include <yaml-cpp/yaml.h>
+#include <iostream>
 
 typedef struct _CustomData
 {
@@ -19,6 +21,7 @@ typedef struct _CustomData
 
 
 } CustomData;
+
 
 /* The appsink has received a buffer */
 static GstFlowReturn new_sample(GstElement *sink, CustomData *data)
@@ -112,6 +115,18 @@ static void sink_message_cb(GstBus *bus, GstMessage *msg, CustomData *data)
 int
 main (int argc, char *argv[])
 {
+    YAML::Node config;
+    
+    try{
+	config = YAML::LoadFile("./config.yaml");
+    } catch(YAML::BadFile &e) {
+        printf(" read error ! \n");
+        return -1;
+    }
+    
+    std::string videosource = config["video_source"].as<std::string>();
+    std::string videosink = config["video_sink"].as<std::string>();
+    
     CustomData data;
     
   /* Initialize GStreamer */
@@ -120,7 +135,7 @@ main (int argc, char *argv[])
     data.loop = g_main_loop_new(NULL, FALSE);
         
     /* Create the elements */	
-    data.video_source 		= gst_element_factory_make("videotestsrc", "video_source");
+    data.video_source 		= gst_element_factory_make(videosource.c_str(), "video_source");
     data.video_caps1		= gst_element_factory_make ("capsfilter","video_caps");  
     data.video_convert 		= gst_element_factory_make("videoconvert", "video_convert");
     data.app_sink 		= gst_element_factory_make("appsink", "app_sink");
@@ -169,7 +184,7 @@ main (int argc, char *argv[])
 
     data.app_source 		= gst_element_factory_make("appsrc", "app_source");
     data.video_convert		= gst_element_factory_make("videoconvert", "video_convert");
-    data.video_sink 		= gst_element_factory_make("xvimagesink", "video_sink");
+    data.video_sink 		= gst_element_factory_make(videosink.c_str(), "video_sink");
 
     /* Create the empty pipeline */
     data.sink_pipeline 	= gst_pipeline_new("sink_pipeline");

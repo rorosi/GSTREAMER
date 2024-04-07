@@ -1,0 +1,4 @@
+video_source:
+  videotestsrc
+video_sink:
+  ximagesink

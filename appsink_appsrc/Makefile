@@ -16,7 +16,7 @@ GSTREAMERLIB	+= `pkg-config $(GSTREMER_APP_PKG) --libs`
 GSTREAMER_INC_PATH = /usr/include/gstreamer-1.0
 # GSTREAMER_INC_PATH += /usr/include/glib-2.0
 
-LIBS += $(GSTREAMERLIB)
+LIBS += $(GSTREAMERLIB) -lyaml-cpp
 LIBDIR = -L$(APP_LIB_PATH)
 
 CFLAGS = -g -Wall -O2
