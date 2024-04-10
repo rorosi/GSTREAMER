@@ -1,7 +1,8 @@
 #include <gst/gst.h>
-#include <string.h>
 #include <gst/app/gstappsrc.h>
 #include <gst/app/gstappsink.h>
+#include <string.h>
+
 #include <yaml-cpp/yaml.h>
 #include <iostream>
 
@@ -17,11 +18,32 @@ typedef struct _CustomData
 	GstBus *sink_bus; GstElement *sink_pipeline; GstCaps *sink_caps;
 
 //common
-	GstElement *app_sink, *app_source, *video_sink, *video_convert, *video_source, *video_caps1;
+	GstElement *app_sink, *app_source, *video_sink, *video_convert, *video_source, *video_caps;
 
+//config
+	std::string videosource, videosink, app_format, app_width, app_height, app_framerate;
 
 } CustomData;
 
+
+int Setup_Config(YAML::Node config, CustomData *data)
+{
+    try{
+	config = YAML::LoadFile("./config.yaml");
+    } catch(YAML::BadFile &e) {
+        printf(" read error ! \n");
+        return -1;
+    }
+    
+    data->videosource = config["video_source"].as<std::string>();
+    data->videosink = config["video_sink"].as<std::string>();
+    data->app_format = config["app_format"].as<std::string>();
+    data->app_width = config["app_width"].as<std::string>();
+    data->app_height = config["app_height"].as<std::string>();
+    data->app_framerate = config["app_height"].as<std::string>();
+    
+    return 0;
+}
 
 /* The appsink has received a buffer */
 static GstFlowReturn new_sample(GstElement *sink, CustomData *data)
@@ -115,19 +137,11 @@ static void sink_message_cb(GstBus *bus, GstMessage *msg, CustomData *data)
 int
 main (int argc, char *argv[])
 {
-    YAML::Node config;
-    
-    try{
-	config = YAML::LoadFile("./config.yaml");
-    } catch(YAML::BadFile &e) {
-        printf(" read error ! \n");
-        return -1;
-    }
-    
-    std::string videosource = config["video_source"].as<std::string>();
-    std::string videosink = config["video_sink"].as<std::string>();
-    
     CustomData data;
+    YAML::Node node;
+    
+  /* Setup Element */
+    Setup_Config(node, &data); 
     
   /* Initialize GStreamer */
     gst_init(NULL, NULL);
@@ -135,8 +149,8 @@ main (int argc, char *argv[])
     data.loop = g_main_loop_new(NULL, FALSE);
         
     /* Create the elements */	
-    data.video_source 		= gst_element_factory_make(videosource.c_str(), "video_source");
-    data.video_caps1		= gst_element_factory_make ("capsfilter","video_caps");  
+    data.video_source 		= gst_element_factory_make(data.videosource.c_str(), "video_source");
+    data.video_caps		= gst_element_factory_make ("capsfilter","video_caps");  
     data.video_convert 		= gst_element_factory_make("videoconvert", "video_convert");
     data.app_sink 		= gst_element_factory_make("appsink", "app_sink");
     
@@ -150,23 +164,23 @@ main (int argc, char *argv[])
     
     /* Modify the caps properties */
     data.src_caps = gst_caps_new_simple("video/x-raw",\
-        "format", G_TYPE_STRING, "UYVY",\
-        "width", G_TYPE_INT, 640, \
-        "height", G_TYPE_INT, 480, \
-        "framerate", GST_TYPE_FRACTION, 30, 1,
+        "format", G_TYPE_STRING, data.app_format.c_str(),\
+        "width", G_TYPE_INT, stoi(data.app_width), \
+        "height", G_TYPE_INT, stoi(data.app_height), \
+        "framerate", GST_TYPE_FRACTION, stoi(data.app_framerate), 1,
         NULL);
      
-    g_object_set (G_OBJECT (data.video_caps1), "caps", data.src_caps, NULL);
+    g_object_set (G_OBJECT (data.video_caps), "caps", data.src_caps, NULL);
     
     g_object_set(data.app_sink, "emit-signals", TRUE, NULL);
     g_signal_connect(data.app_sink, "new-sample", G_CALLBACK(new_sample), &data);
     gst_caps_unref(data.src_caps);
     
     /* Build the pipeline */
-    gst_bin_add_many(GST_BIN(data.src_pipeline), data.video_source, data.video_caps1, data.video_convert, data.app_sink, NULL);
+    gst_bin_add_many(GST_BIN(data.src_pipeline), data.video_source, data.video_caps, data.video_convert, data.app_sink, NULL);
     
     /* Link the elements together */
-    if(gst_element_link_many(data.video_source, data.video_caps1, data.video_convert, NULL) != TRUE || \
+    if(gst_element_link_many(data.video_source, data.video_caps, data.video_convert, NULL) != TRUE || \
         gst_element_link(data.video_convert, data.app_sink) != TRUE)
     {
         g_printerr("Elements could not be linked.\n");
@@ -184,7 +198,7 @@ main (int argc, char *argv[])
 
     data.app_source 		= gst_element_factory_make("appsrc", "app_source");
     data.video_convert		= gst_element_factory_make("videoconvert", "video_convert");
-    data.video_sink 		= gst_element_factory_make(videosink.c_str(), "video_sink");
+    data.video_sink 		= gst_element_factory_make(data.videosink.c_str(), "video_sink");
 
     /* Create the empty pipeline */
     data.sink_pipeline 	= gst_pipeline_new("sink_pipeline");
@@ -200,10 +214,10 @@ main (int argc, char *argv[])
     
     /* Modify the caps properties */
     data.sink_caps = gst_caps_new_simple("video/x-raw", \
-        "format", G_TYPE_STRING, "UYVY", \
-        "width", G_TYPE_INT, 640, \
-        "height", G_TYPE_INT, 480, \
-        "framerate", GST_TYPE_FRACTION, 30, 1, \
+        "format", G_TYPE_STRING, data.app_format.c_str(), \
+        "width", G_TYPE_INT, stoi(data.app_width), \
+        "height", G_TYPE_INT, stoi(data.app_height), \
+        "framerate", GST_TYPE_FRACTION, stoi(data.app_framerate), 1, \
         NULL);
 	
     g_object_set(data.app_source, "caps", data.sink_caps, NULL);

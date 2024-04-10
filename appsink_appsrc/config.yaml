@@ -1,4 +1,6 @@
-video_source:
-  videotestsrc
-video_sink:
-  ximagesink
+video_source: videotestsrc
+video_sink: ximagesink
+app_format: UYVY
+app_width: 640
+app_height: 480
+app_framerate : 30
